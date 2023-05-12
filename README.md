@@ -1,7 +1,8 @@
 # FESTA 
 
 A proof of concept implementation of the isogeny-based PKE FESTA[^1], accompanying 
-the research paper *FESTA: Fast Encryption from Supersingular Torsion Attacks*
+the research paper 
+[FESTA: Fast Encryption from Supersingular Torsion Attacks](https://eprint.iacr.org/2023/660)
 by Andrea Basso, Luciano Maino and Giacomo Pope.
 
 [^1]: *party* in Italian :it: :tada:
