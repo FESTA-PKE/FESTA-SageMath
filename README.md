@@ -108,7 +108,7 @@ file `example_festa.sage` with the following arguments:
 sage example_festa.sage [--128, --192, --256, --toy]
 ```
 
-- Be default, the 128-bit security parameters are selected. To access other parameters:
+- By default, the 128-bit security parameters are selected. To access other parameters:
   - The flag `--192` selects the parameters aiming for 192-bit security 
   - The flag `--256` selects the parameters aiming for 256-bit security 
   - The flag `--toy` selects small toy parameters suitable for debugging
