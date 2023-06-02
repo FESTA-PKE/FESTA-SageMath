@@ -1,11 +1,7 @@
-# Python imports
-from random import randint
-
 # Sage imports
 from sage.all import (
     ZZ,
     GF,
-    Zmod,
     Matrix,
     prod, 
     proof,

@@ -34,7 +34,6 @@ from sage.all import (
     PolynomialRing,
     EllipticCurve,
     Matrix,
-    vector,
 )
 
 # local imports
@@ -259,7 +258,7 @@ def FromJacToJac(h, D1, D2):
     where D1, D2 are divisors on J(H) and Dij are the Mumford coordinates
     of the divisors Di
     """
-    R,x = h.parent().objgen()
+    x = h.parent().gen()
 
     G1, G2 = D1[0].monic(), D2[0].monic()
     G3, r3 = h.quo_rem(G1 * G2)
@@ -356,8 +355,8 @@ def FromJacToProd(G1, G2, G3):
     gamma2 = (X + Y2)
     gamma3 = (X + Y3)
 
-    # Precompute products of the coefficents
-    # to consruct the polynomials
+    # Precompute products of the coefficients
+    # to construct the polynomials
     # Cost: 9M
     beta12 = beta1*beta2
     beta23 = beta2*beta3
@@ -486,21 +485,21 @@ def _check_maximally_isotropic(P, Q, R, S, a):
 
     # Ensure both bases are linearly independent
     if P2 == Q2 or R2 == S2:
-        return False, None
+        return False, []
 
     # Ensure all points have order dividing 2^a
     if not all((2*X).is_zero() for X in two_torsion):
-        return False, None
+        return False, []
         
     # Ensure all points have order exactly 2^a
     if any(X.is_zero() for X in two_torsion):
-        return False, None
+        return False, []
 
     # Ensure kernel is maximally isotropic
     ePQ = weil_pairing_pari(P, Q, 2*k) # 2k = 2^a
     eRS = weil_pairing_pari(R, S, 2*k)
     if ePQ*eRS != 1:
-        return False, None
+        return False, []
 
     return True, two_torsion
 

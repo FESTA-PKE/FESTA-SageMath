@@ -24,7 +24,7 @@ from sage.structure.element import RingElement
 # Local Imports
 from kummer_line import KummerLine
 from kummer_isogeny import KummerLineIsogeny
-from supersingular import torsion_basis, compute_point_order_D
+from supersingular import torsion_basis
 from utilities import weil_pairing_pari
 
 # =========================================================== #
