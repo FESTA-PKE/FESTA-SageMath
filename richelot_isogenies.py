@@ -40,78 +40,108 @@ from sage.all import (
 # local imports
 from divisor_arithmetic import affine_dbl_iter, affine_add
 from supersingular import weil_pairing_pari
-from utilities import quadratic_roots, invert_mod_polynomial_quadratic, invert_mod_polynomial_quartic
+from utilities import sqrt_Fp2, invert_mod_polynomial_quadratic, invert_mod_polynomial_quartic
 
 def FromProdToJac(P2, Q2, R2, S2):
     """
     Compact explicit formula for the gluing isogeny is derived in
     https://ia.cr/2022/1283
     """
-    Fp2 = P2.curve().base()
-    
+    Fp2 = R2.curve().base()
+
     # NOTE: we use a generic implementation of the PolynomialRing
     # as this is faster than NTL in this scenario due to the slowness
     # of coefficient extraction and polynomial construction!
-    Rx = PolynomialRing(Fp2, name="x", implementation="generic")
-    x = Rx.gens()[0]
+    R = PolynomialRing(Fp2, name="x", implementation="generic")
+    x = R.gens()[0]
 
-    a1, a2, a3 = P2[0], Q2[0], (P2 + Q2)[0]
-    b1, b2, b3 = R2[0], S2[0], (R2 + S2)[0]
+    # Extract roots.
+    ai = (P2[0], Q2[0], (P2 + Q2)[0])
+    bi = (R2[0], S2[0], (R2 + S2)[0])
+    a, a_inv = (a for a in ai if not a.is_zero())
+    b, b_inv = (b for b in bi if not b.is_zero())
 
-    # Compute coefficients
-    M = Matrix(Fp2, [
-        [a1*b1, a1, b1],
-        [a2*b2, a2, b2],
-        [a3*b3, a3, b3]])
-    R, S, T = M.inverse() * vector(Fp2, [1,1,1])
-    RD = R * M.determinant()
-    da = (a1 - a2)*(a2 - a3)*(a3 - a1)
-    db = (b1 - b2)*(b2 - b3)*(b3 - b1)
+    # Compute the first two roots of the
+    # hyperelliptic curve
+    # 2M
+    alpha_2 = a*b_inv
+    alpha_3 = b*a_inv
 
-    R_inv = 1/R
-    RD_inv = 1/RD
-    s1, t1 = - da * RD_inv, db * RD_inv
-    s2, t2 = - T * R_inv, -S * R_inv
+    # values to invert
+    z1 = a - a_inv
+    z2 = b - b_inv
+    d  = alpha_2 - alpha_3
 
-    s1_inv = 1/s1
-    a1_t = (a1 - s2) * s1_inv
-    a2_t = (a2 - s2) * s1_inv
-    a3_t = (a3 - s2) * s1_inv
-    h = s1 * (x**2 - a1_t) * (x**2 - a2_t) * (x**2 - a3_t)
+    # Montgomery trick for inversions
+    # 2I = 3M + 1I
+    z1d = z1*d
+    z1d_inv = 1/z1d
 
-    # We need the image of (P_c, P) and (Q_c, Q) in J
-    # The image of (P_c, P) is the image of P_c as a divisor on H
-    # plus the image of P as a divisor on H.
+    d_inv  = z1*z1d_inv
+    z1_inv = d*z1d_inv
+
+    # Compute the last root of the 
+    # hyperelliptic curve
+    # 1M
+    alpha_1 = z2 * z1_inv
+
+    # Compute s1, s2 and s1_inv for
+    # twisting and eval
+    # 3M
+    s1 =  z1 * d_inv
+    s2 = -z2 * d_inv
+    s1_inv = d * z1_inv
+    
+    # Compute codomain curve equation
+    # 2M
+    h1, h3, h5 = 0, 0, 0
+    h0 = s2
+    h2 = s1 - s2*(alpha_2 + alpha_3)
+    h4 = -s1*(alpha_1 + alpha_2 + alpha_3)
+    h6 = s1
+
+    h_coeffs = [h0,h1,h2,h3,h4,h5,h6]
+    h = R(h_coeffs)
+
+    # We need the image of (P1, P2) and (Q1, Q2) in J
+    # The image of (P1, P2) is the image of P1 as a divisor on H
+    # plus the image of P2 as a divisor on H.
     def isogeny(pair):
         # Argument members may be None to indicate the zero point.
+        P1, P2 = pair
 
         # The projection maps are:
         # H->C: (xC = s1/x²+s2, yC = s1 y)
         # so we compute Mumford coordinates of the divisor f^-1(P_c): a(x), y-b(x)
-        Pc, P = pair
-        if Pc:
-            xPc, yPc = Pc.xy()
-            uC = s1 * x**2 + s2 - xPc
-            vC = Rx(yPc * s1_inv)
+        if P1:
+            xP1, yP1 = P1.xy()
+            uP1 = x**2 + (s2 - xP1) * s1_inv
+            vP1 = R(yP1 * s1_inv)
 
-            DC = (uC, vC)
+            DP1 = (uP1, vP1)
 
         # Same for E
-        # H->E: (xE = t1 x² + t2, yE = t1 y/x^3)
-        if P:
-            xP, yP = P.xy()
-            uE = (xP - t2) * x**2 - t1
-            vE = yP * x**3 / t1
-            vE = vE % uE
+        # H->E: (xE = s2 x² + s1, yE = s2 y/x^3)
+        if P2:
+            xP2, yP2 = P2.xy()
+            shift_inv = 1 / (xP2 - s1)
+            
+            uP2 =  x**2 - s2 * shift_inv
+        
+            # mod uP2 we have that
+            # x^2 = s2 / (xP2 - s1)
+            # vP2 = yP2 * x**3 * s2_inv
+            vP2 = x * yP2 * shift_inv
 
-            DE = (uE, vE)
+            DP2 = (uP2, vP2)
 
-        if Pc and P:
-            return affine_add(h, DC, DE)
-        if Pc:
-            return DC
-        if P:
-            return DE
+        # Now we perform addition of the two divisors
+        if P1 and P2:
+            return affine_add(h, DP1, DP2)
+        if P1:
+            return DP1
+        if P2:
+            return DP2
 
     return h, isogeny
 
@@ -223,16 +253,13 @@ class RichelotCorr:
         Dy = (-Py) % Dx
         return (Dx, Dy)
 
-def FromJacToJac(h, D11, D12, D21, D22):
+def FromJacToJac(h, D1, D2):
     """
     Isogeny between J(H) -> J(H') with kernel ((D11, D12), (D21, D22))
     where D1, D2 are divisors on J(H) and Dij are the Mumford coordinates
     of the divisors Di
     """
     R,x = h.parent().objgen()
-
-    D1 = (D11, D12)
-    D2 = (D21, D22)
 
     G1, G2 = D1[0].monic(), D2[0].monic()
     G3, r3 = h.quo_rem(G1 * G2)
@@ -262,68 +289,151 @@ def FromJacToProd(G1, G2, G3):
 
     This computation is the same as Benjamin Smith
     see 8.3 in http://iml.univ-mrs.fr/~kohel/phd/thesis_smith.pdf
+
+    Cost: 42M 1S 1I + 1 sqrt
     """
-    h = G1*G2*G3
-    x = h.parent().gen()
+    R = G1.parent()
+    x = R.gen()
 
-    M = Matrix(G.padded_list(3) for G in (G1,G2,G3))
-    # Find homography
-    u, v, w = M.right_kernel().gen()
-    d = u/2
-    ad, b = quadratic_roots(-v, w*d/2)
-    a = ad/d
+    # make monic for SL2 transform
+    b1, a1, g1 = G1.list()
+    b2, a2, g2 = G2.list()
+    b3, a3, g3 = G3.list()
 
-    # Apply transform G(x) -> G((a*x+b)/(x+d))*(x+d)^2
-    # The coefficients of x^2 are M * (1, a, a^2)
-    # The coefficients of 1 are M * (d^2, b*d, b^2)
-    H11, H21, H31 = M * vector([1, a, a*a])
-    H10, H20, H30 = M * vector([d*d, b*d, b*b])
+    # Montgomery trick to compute
+    # inverse of gi 
+    # Cost 6M 1I
+    g12 = g1*g2
+    g123 = g12*g3
+    g123_inv = 1/g123
+    g12_inv = g3 * g123_inv
 
-    p1 = (H11*x+H10)*(H21*x+H20)*(H31*x+H30)
-    p2 = (H11+H10*x)*(H21+H20*x)*(H31+H30*x)
+    g1_inv  = g2 * g12_inv
+    g2_inv  = g1 * g12_inv
+    g3_inv  = g12 * g123_inv
 
-    # We will need to map to actual elliptic curve
-    p1norm = (x + H10*H21*H31)*(x + H20*H11*H31)*(x + H30*H11*H21)
-    p2norm = (x + H11*H20*H30)*(x + H21*H10*H30)*(x + H31*H10*H20)
-    E1 = EllipticCurve([0, p1norm[2], 0, p1norm[1], p1norm[0]])
-    E2 = EllipticCurve([0, p2norm[2], 0, p2norm[1], p2norm[0]])
+    # Hi = x^2 + ai*x + bi
+    # Make Hi monic
+    # Cost: 6M
+    b1, a1 = b1 * g1_inv, a1 * g1_inv
+    b2, a2 = b2 * g2_inv, a2 * g2_inv
+    b3, a3 = b3 * g3_inv, a3 * g3_inv
+
+    # D^2 = Res(H1, H2)
+    r = a1 - a2
+    q = b1 - b2
+
+    # Compute resultant of H1, H2
+    # Cost: 3M 1S
+    DD = r*(a1*b2 - b1*a2) + q**2
+
+    # Magic square root
+    # TODO: can we recover this from the 
+    # four-torsion?
+    D = sqrt_Fp2(DD)
+
+    # Mapping to remove linear terms
+    u1 = q + D
+    u2 = q - D
+    v1 = r
+    v2 = r
+    u_map = R([-u1, u2])
+    v_map = R([v1, -v2])
+
+    # Compute coefficients of 
+    # Fi = beta_i x^2 + gamma_i
+    # Cost: 8M
+    X  = DD + DD
+    Y1 = D*(q + q - a1*r)
+    Y2 = D*(q + q - a2*r)
+    Y3 = D*(q + q - a3*r)
+
+    beta1 = g123*(X - Y1)
+    beta2 = (X - Y2)
+    beta3 = (X - Y3)
+    
+    gamma1 = g123*(X + Y1)
+    gamma2 = (X + Y2)
+    gamma3 = (X + Y3)
+
+    # Precompute products of the coefficents
+    # to consruct the polynomials
+    # Cost: 9M
+    beta12 = beta1*beta2
+    beta23 = beta2*beta3
+    beta13 = beta1*beta3
+    beta123 = beta1*beta23
+
+    gamma12 = gamma1*gamma2
+    gamma23 = gamma2*gamma3
+    gamma13 = gamma1*gamma3
+    gamma123 = gamma1*gamma23
+
+    betagamma123 = beta123*gamma123
+
+    # Coefficients of the even terms of the transformed
+    # sextic
+    # Cost: 6M
+    c3 = beta123
+    c2 = beta23*gamma1 + beta13*gamma2 + beta12*gamma3
+    c1 = beta3*gamma12 + beta2*gamma13 + beta1*gamma23
+    c0 = gamma123
+
+    # Applying the projection to the above, we get two 
+    # cubics
+    E1_poly = R([c0,c1,c2,c3])
+    E2_poly = E1_poly.reverse()
+
+    # For SageMath, we need this cubic to be monic
+    # we work with the scaled coefficients and then
+    # map to the curves with `morphE1` and `morphE2`
+    # Cost: 4M
+    e12 = c2
+    e11 = beta123*c1
+    e10 = beta123*betagamma123
+
+    e22 = c1
+    e21 = gamma123*c2
+    e20 = gamma123*betagamma123
+
+    E1 = EllipticCurve([0, e12, 0, e11, e10])
+    E2 = EllipticCurve([0, e22, 0, e21, e20])
 
     def morphE1(x, y):
         # from y^2=p1 to y^2=p1norm
-        return (H11*H21*H31*x, H11*H21*H31*y)
+        return (beta123*x, beta123*y)
     
     def morphE2(x, y):
-        # from y^2=p1 to y^2=p2norm
-        return (H10*H20*H30*x, H10*H20*H30*y)
-    
-    # The morphisms are:
-    # inverse homography:
-    # H->H2: x, y => ((b-dx) / (x-a), y/(x-a)^3)
-    # then H2->E1:(x,y) => (x^2,y)
-    #   or H2->E2:(x,y) => (1/x^2,y/x^3)
+        # from y^2=p2 to y^2=p2norm
+        return (gamma123*x, gamma123*y)
 
     def isogeny(D):
         # To map a divisor, perform the change of coordinates
         # on Mumford coordinates
-        U, V = D
+        U_input, V_input = D
+        
         # apply homography
         # y = v1 x + v0 =>
-        U_ = U[0] * (x+d)**2 + U[1]*(a*x+b)*(x+d) + U[2]*(a*x+b)**2
-        V_ = V[0] * (x+d)**3 + V[1]*(a*x+b)*(x+d)**2
-        V_ = V_ % U_
-        v1, v0 = V_[1], V_[0]
-        # prepare symmetric functions
-        s = - U_[1] / U_[2]
-        p = U_[0] / U_[2]
-        # compute Mumford coordinates on E1
+        U = U_input[0] * v_map**2 + U_input[1]*u_map*v_map + U_input[2]*u_map**2
+        V = V_input[0] * v_map**3 + V_input[1]*u_map*v_map**2
+        V = V % U
+
+        # Extract coefficents from V
+        v1, v0 = V[1], V[0]
+        
+        # Prepare symmetric functions
+        s = - U[1] / U[2]
+        p = U[0] / U[2]
+
+        # Compute Mumford coordinates on E1
         # Points x1, x2 map to x1^2, x2^2
         U1 = x**2 - (s*s - 2*p)*x + p**2
         # y = v1 x + v0 becomes (y - v0)^2 = v1^2 x^2
         # so 2v0 y-v0^2 = p1 - v1^2 xH^2 = p1 - v1^2 xE1
-        V1 = (p1 - v1**2 * x + v0**2) / (2*v0)
+        V1 = (E1_poly - v1**2 * x + v0**2) / (2*v0)
         # Reduce Mumford coordinates to get a E1 point
         V1 = V1 % U1
-        U1red = (p1 - V1**2) // U1
+        U1red = (E1_poly - V1**2) // U1
         xP1 = -U1red[0] / U1red[1]
         yP1 = V1(xP1)
 
@@ -335,14 +445,14 @@ def FromJacToProd(G1, G2, G3):
         # (yE - y1 x1 xE^2)(yE - y2 x2 xE^2) = 0
         # p2 - yE (x1 y1 + x2 y2) xE^2 + (x1 y1 x2 y2 xE^4) = 0
         V21 = x**2 * (v1 * (s*s-2*p) + v0*s)
-        V20 = p2 + x**4 * (p*(v1**2*p + v1*v0*s + v0**2))
+        V20 = E2_poly + x**4 * (p*(v1**2*p + v1*v0*s + v0**2))
         # V21 * y = V20
         V21 = V21 % U2
         V21inv = invert_mod_polynomial_quadratic(V21, U2)
         V2 = (V21inv * V20) % U2
 
         # Reduce coordinates
-        U2red = (p2 - V2**2) // U2
+        U2red = (E2_poly - V2**2) // U2
         xP2 = -U2red[0] / U2red[1]
         yP2 = V2(xP2)
 
@@ -466,7 +576,7 @@ def split_richelot_chain(P, Q, R, S, a, strategy):
 
         # Compute the next step in the isogeny with the divisors D1, D2
         D1, D2 = ker
-        h, f = FromJacToJac(h, D1[0], D1[1], D2[0], D2[1])
+        h, f = FromJacToJac(h, D1, D2)
         
         # Update the chain of isogenies
         richelot_chain.append(f)
@@ -477,8 +587,6 @@ def split_richelot_chain(P, Q, R, S, a, strategy):
 
         # Push the kernel elements through the last step in the isogeny chain
         kernel_elements = [(f(D1), f(D2)) for D1, D2 in kernel_elements]
-
-    # print(f"Middle steps took: {time.time() - t0:10f}")
 
     # Now we are left with a quadratic splitting: is it singular?
     D1, D2 = kernel_elements[-1]

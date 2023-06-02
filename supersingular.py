@@ -272,20 +272,3 @@ def compute_canonical_kernel(imP, imQ, D, basis=None, ePQ=None):
     t2 = CRT(t2_list, di_list)
 
     return (t1*b1 + t2*b2) % D
-
-# ============================================= #
-#         Map from Mont. to Weierstrass         #
-# ============================================= #
-
-def montgomery_to_weierstrass_model(E, points):
-    """
-    Map from a Montgomery model to the corresponding
-    short Weierstrass model of an elliptic curve E
-
-    Additionally, given a list of points, maps the points 
-    from the Montgomery to the short Weierstrass curve
-    """
-    Ew = E.short_weierstrass_model()
-    iso = E.isomorphism_to(Ew)
-    images = (iso(P) for P in points)
-    return Ew, images
