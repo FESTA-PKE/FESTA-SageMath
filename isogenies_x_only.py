@@ -18,7 +18,7 @@ result back to full points on the codomain curves.
 """
 
 # Sage imports
-from sage.all import gcd
+from sage.all import gcd, randint
 from sage.structure.element import RingElement
 
 # Local Imports
@@ -38,7 +38,9 @@ def _random_isogeny_x_only(E, D):
     """
     # Compute a random point of order D to act as our
     # isogeny kernel
-    K = compute_point_order_D(E, D)
+    k = randint(0, D)
+    P, Q = torsion_basis(E, D)
+    K = P + k*Q
 
     # Map curve and kernel to Kummer Line
     L = KummerLine(E)
