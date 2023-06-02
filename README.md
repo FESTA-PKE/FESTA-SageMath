@@ -113,7 +113,7 @@ sage example_festa.sage [--128, --192, --256, --toy, --circulant]
   - The flag `--256` selects the parameters aiming for 256-bit security 
   - The flag `--toy` selects small toy parameters suitable for debugging
 - By default, the masking matrices are diagonal, unitary, invertible matrices.
-  - The flag '--circulant' selected the matrices to be circulant, unitary, invertible matrices instead.
+  - The flag `--circulant` selected the matrices to be circulant, unitary, invertible matrices instead.
 
 #### Example Output
 
