@@ -37,8 +37,9 @@ from utilities import print_info, speed_up_sagemath
 # arithmetic and isogenies
 speed_up_sagemath()
 
-# Default is FESTA_128
+# Default is FESTA_128 with diagonal masking matrices
 SECURITY = "128"
+DIAG = True
 
 for arg in sys.argv[1:]:
     if arg.lower() in ["--toy", "-t"]:
@@ -47,13 +48,15 @@ for arg in sys.argv[1:]:
         SECURITY = "192"
     elif  arg.lower() in ["--256", "-V"]:
         SECURITY = "256"
+    elif arg.lower() in ["-c", "--circulant"]:
+        DIAG = False
 
 NAME = "FESTA_" + SECURITY
 
 # Initialise Alice and Bob
 params = parameter_sets[NAME]
-alice = FESTA(params)
-bob   = FESTA(params)
+alice = FESTA(params, diag=DIAG)
+bob   = FESTA(params, diag=DIAG)
 
 # Generate a random message
 m = randint(0, 2**alice.lambda_security - 1)
@@ -68,7 +71,6 @@ t0 = time.time()
 alice.keygen()
 keygen_time = time.time() - t0
 print_info(f"Keygen took: {keygen_time:.3f} seconds")
-
 
 # ============================== #
 #           Encryption           #

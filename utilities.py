@@ -31,16 +31,43 @@ def canonical_matrix(M):
         return -M
     return M    
 
-def random_matrix(l, b):
+def random_diag_matrix(R, alpha=None):
     r"""
     Compute a random, diagonal, unitary 
     invertible matrix M \in Z / (2^b) Z
     """
-    R = Zmod(l**b)
-    alpha = ZZ(2*randint(0, l**(b-1)) + 1)
+    if alpha is None:
+        alpha = R.random_element()
+
+    # Ensure alpha is even
+    alpha = alpha + (alpha % 2 + 1) 
     M = Matrix(R, 2, 2, [alpha, 0, 0, ~alpha])
 
     return canonical_matrix(M)
+
+def random_circulant_matrix(R, beta=None):
+    r"""
+    Compute a random, circulant, unitary 
+    invertible matrix M \in Z / (2^b) Z
+    """
+    if beta is None:
+        beta = R.random_element()
+    b = 4*beta
+    aa = R(b*b + 1)
+    a = aa.sqrt() # TODO: fast sqrt mod 2^k?
+    M = Matrix(R, 2, 2, [a, b, b, a])
+
+    return canonical_matrix(M)
+
+def random_matrix(R, ele=None, diag=True):
+    """
+    Compute a random masking matrix which
+    is commutative, invertible and unitary
+    in Z / (N Z)
+    """
+    if diag:
+        return random_diag_matrix(R, alpha=ele)
+    return random_circulant_matrix(R, beta=ele)
 
 def mask_torsion_points(A, P, Q):
     """
@@ -468,8 +495,8 @@ def invert_mod_polynomial_quadratic(f, g):
     """
     R = f.parent()
 
-    f0, f1 = f.list()
-    g0, g1, g2 = g.list()
+    f0, f1 = f[0], f[1]
+    g0, g1, g2 = g[0], g[1], g[2]
 
     f0_g2 = f0*g2
 

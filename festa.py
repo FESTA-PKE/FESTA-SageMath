@@ -18,8 +18,7 @@ from supersingular import (
     torsion_basis,
     precompute_elligator_tables,
     entangled_torsion_basis,
-    compute_canonical_kernel,
-    montgomery_to_weierstrass_model
+    compute_canonical_kernel
 )
 from isogenies_x_only import (
     isogeny_from_scalar_x_only,
@@ -42,6 +41,7 @@ from utilities import (
     bytes_to_integer,
     BiDLP,
     DLP_power_two,
+    BiDLP_power_two,
     weil_pairing_pari,
     optimised_strategy
 )
@@ -58,7 +58,7 @@ class FESTA:
     - encrypt
     - decrypt
     """
-    def __init__(self, params):
+    def __init__(self, params, diag=True):
         """
         FESTA initialisation is used to set the main FESTA parameters
         along with auxiliary parameters which can be precomputed to save
@@ -79,6 +79,7 @@ class FESTA:
         self.b = params["b"]
         self.l_power = self.l**self.b
         self.strategy = optimised_strategy(self.b - 1)
+        self.Rlb = Zmod(self.l_power)
 
         # phi_i isogeny degrees
         self.d1 = params["d1"]
@@ -143,6 +144,9 @@ class FESTA:
         self.p_byte_len = (self.p.nbits() + 7) // 8
         self.l_power_byte_len = (self.b + 7) // 8
         self.pk_bytes = 2*self.p_byte_len + 3*self.l_power_byte_len
+        
+        # Pick whether masking matrices are diagonal or circulant
+        self.diag = diag
 
         # Internal values for key generation
         self.pk = None
@@ -170,27 +174,23 @@ class FESTA:
         """
         Extract bytes from a shake hash and reduce modulo 2^b
         Return a matrix in Mb
-
-        NOTE: this assumes that the masking matrices are diagonal 
-        and that l=2
         """
         if self.l != 2:
             raise NotImplementedError("_extract_Mb is only implemented for l=2")
 
         # Extract out bytes from shake
         byte_len = (self.b + 7) // 8
-        alpha = bytes_to_integer(shake.read(byte_len))
-
-        # Ensure all values are odd
+        matrix_ele = bytes_to_integer(shake.read(byte_len))
+        
+        # Reduce to be exactly b-bits
         mask = self.b % 8
         if mask:
-            alpha = alpha >> mask
-        alpha = (alpha >> 1 << 1) + 1
-        beta = inverse_mod(alpha, self.l_power)
+            matrix_ele = matrix_ele >> mask
 
-        # Construct the matrix in the ring Z/2^bZ
-        R = Zmod(self.l_power)
-        M = Matrix(R, 2, 2, [alpha, 0, 0, beta])
+        # Compute random matrix. Second element is generated canonically
+        # given the first for both diagonal and circulant matrices.
+        M = random_matrix(self.Rlb, ele=matrix_ele, diag=self.diag)
+
         return M
 
     def G(self, x, X):
@@ -201,8 +201,7 @@ class FESTA:
         # Convert elements to bytes
         x_bytes = integer_to_bytes(x)
 
-        # TODO: we could only extract the diagonal elements of this
-        # matrix, but using all elements is fine
+        # Convert matrix to bytes
         X_bytes = b"".join(integer_to_bytes(x) for x in X.list())
 
         # Initiate SHAKE128 with domain separator 
@@ -285,7 +284,10 @@ class FESTA:
         decompression of the public key, where (Ei, Ri, Si) are decompressed
         from the supplied byte string
         """
-        assert len(ct_bytes) == 2*self.pk_bytes, "Length of compressed ciphertext is invalid"
+        if not self.pk:
+            raise ValueError("A valid public key is required for compression")
+        
+        assert len(ct_bytes) == 2*self.pk_bytes, "Length of compressed ciphertext is invalid, aborting"
 
         # Split bytes into (E1, R1, S1) and (E2, R2, S2)
         ERS1_bytes = ct_bytes[:self.pk_bytes]
@@ -382,26 +384,18 @@ class FESTA:
 
         return s1, s2
 
-    def _recover_B(self, L1, L2, imPd1b, imQd1b):
+    def _recover_B_diag(self, R, P, Q):
         """
-        Helper function to recover the masking matrix B from the
-        output of the (l,l)-chain during the inverse trapdoor function
-        calculation
+        Helper function to recover the elements of the 
+        masking matrix when it is known to be in diagonal
+        form
         """
-        # Remove odd order from L1 and L2
-        phi_1_dual_R_scaled = self.d1d2 * L1
-        phi_1_dual_S_scaled = self.d1d2 * L2
-
-        # Remove d1 order from imPd1b
-        phi_A1_Pb = self.clear_d1 * imPd1b
-        phi_A1_Qb = self.clear_d1 * imQd1b
-    
         # Recover the first coefficient of the matrix by
         # solving the discrete log
         alpha = DLP_power_two(
-            phi_1_dual_R_scaled + phi_1_dual_S_scaled, 
-            phi_A1_Pb, 
-            phi_A1_Qb, 
+            R, 
+            P, 
+            Q, 
             self.b,
             self.window
         )
@@ -414,11 +408,50 @@ class FESTA:
         # this saves one dlog
         beta  = inverse_mod(alpha, self.l_power)
 
-        # Construct B from alpha and beta
-        B = Matrix(Zmod(self.l_power), 2, 2, [alpha, 0, 0, beta])
-        B = canonical_matrix(B)
+        # Construct diagonal B from alpha and beta
+        return Matrix(self.Rlb, 2, 2, [alpha, 0, 0, beta])
 
-        return B
+    def _recover_B_circulant(self, R, P, Q):
+        """
+        Helper function to recover the elements of the 
+        masking matrix when it is known to be in circulant
+        form
+        """
+        # Recover the first coefficient of the matrix by
+        # solving the discrete log
+        a, b = BiDLP_power_two(
+            R, 
+            P, 
+            Q, 
+            self.b,   
+            self.window
+        )
+        # Scale out by the constant
+        # inv_scalar = (d1**2 * d2 * m1)^(-1) MOD l^b
+        a, b =  self.inv_scalar*a,  self.inv_scalar*b
+
+        # Construct the circulant matrix B from a and b
+        return Matrix(self.Rlb, 2, 2, [a, b, b, a])
+
+    def _recover_B(self, L1, imPd1b, imQd1b):
+        """
+        Helper function to recover the masking matrix B from the
+        output of the (l,l)-chain during the inverse trapdoor function
+        calculation
+        """
+        # Remove odd order from L1 and L2
+        phi_1_dual_R_scaled = self.d1d2 * L1
+
+        # Remove d1 order from imPd1b
+        phi_A1_Pb = self.clear_d1 * imPd1b
+        phi_A1_Qb = self.clear_d1 * imQd1b
+    
+        if self.diag:
+            B = self._recover_B_diag(phi_1_dual_R_scaled, phi_A1_Pb, phi_A1_Qb)
+        else:
+            B = self._recover_B_circulant(phi_1_dual_R_scaled, phi_A1_Pb, phi_A1_Qb)
+
+        return canonical_matrix(B)
 
     def _recover_si_and_B(self, L1, L2, imPd1b, imQd1b, PAd2, QAd2, PA_prime_d2, QA_prime_d2):
         """
@@ -427,7 +460,7 @@ class FESTA:
         calculation
         """
         s1, s2 = self._recover_si(L1, L2, imPd1b, imQd1b, PAd2, QAd2, PA_prime_d2, QA_prime_d2)
-        B = self._recover_B(L1, L2, imPd1b, imQd1b)
+        B = self._recover_B(L1, imPd1b, imQd1b)
         return s1, s2, B
 
     # =========================================== #
@@ -467,15 +500,6 @@ class FESTA:
         # Prepare points to map through Phi
         L1_1, L1_2 = Pd1_1 + R1, Pd2_2
         L2_1, L2_2 = Qd1_1 + S1, Qd2_2
-
-        # Gluing map assumes Weierstrass model, so map everything with 
-        # an isomorphism from Montgomery to the short Weierstrass model
-        # TODO: Can we modify the gluing map for Montgomery curves?
-        E1, (glue_P1, glue_Q1, L1_1, L2_1) = montgomery_to_weierstrass_model(
-            E1, (glue_P1, glue_Q1, L1_1, L2_1))
-        E2, (glue_P2, glue_Q2, L1_2, L2_2) = montgomery_to_weierstrass_model(
-            E2, (glue_P2, glue_Q2, L1_2, L2_2)
-        )
 
         # Package the kernel generators of (l^b, l^b)-chain
         ker_Phi = (glue_P1, glue_Q1, glue_P2, glue_Q2)
@@ -520,7 +544,7 @@ class FESTA:
             <PA_prime_d2, QA_prime_d2> = EA_prime[d2]
         """
         # Random masking matrix
-        A = random_matrix(self.l, self.b)
+        A = random_matrix(self.Rlb, diag=self.diag)
 
         # Compute a random isogeny phi_A of degree dA1 * dA2
         # The isogeny phi_A is equal to phi_A2_tilde \circ phi_A1_tilde
@@ -588,7 +612,7 @@ class FESTA:
 
         # Create random tokens for OAEP
         r = randint(0, self.d2 - 1)
-        R = random_matrix(self.l, self.b)
+        R = random_matrix(self.Rlb, diag=self.diag)
 
         # Pad out the bottom bits of m_prime
         m_prime = m << (self.k)
@@ -623,6 +647,7 @@ class FESTA:
         """
         # Decompress the ciphertext
         c = self.decompress_ciphertext(c_bytes)
+
         # Recover the secret values with the inverse function
         s, t, T = self._trapdoor_inverse(c)
 
