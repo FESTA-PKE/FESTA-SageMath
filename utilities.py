@@ -36,7 +36,7 @@ def random_diag_matrix(R, alpha=None):
         alpha = R.random_element()
 
     # Ensure alpha is even
-    alpha = alpha + (alpha % 2 + 1) 
+    alpha = alpha + ZZ(alpha % 2) + 1
     M = Matrix(R, 2, 2, [alpha, 0, 0, ~alpha])
 
     return canonical_matrix(M)
