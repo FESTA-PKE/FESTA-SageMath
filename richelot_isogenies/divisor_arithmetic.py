@@ -414,5 +414,34 @@ def _dbl_divisor_generic(u1, u0, v1, v0, U0, U1, f2, f3, f4, f5, f6):
     v0dd  = v0dd_1 + v0dd_2
     v0dd -= v0
 
+    """
+    M = [      2*u1*v1 + 2*v0 -4*u1^2*v1 - 2*u0*v1]
+        [                2*v1      -4*u1*v1 + 2*v0]
+
+    v = -3*f6*u1^4 + 2*f5*u1^3 + 3*f6*u0^2 + 2*f5*u0*u1 - f4*u1^2 - 2*f4*u0 - v1^2 + f2
+        -4*f6*u1^3 + 3*f5*u1^2 - 2*f5*u0 + 2*(3*f6*u0 - f4)*u1 + f3
+
+
+
+    ell2_num = 2*f6*u1**5*v1 + 3*f6*u1**4*v0 - 8*f6*u0*u1**3*v1 - 2*f5*u1**4*v1 - 2*f5*u1**3*v0 + 5*f5*u0*u1**2*v1 + 2*f4*u1**3*v1 - 3*f6*u0**2*v0 - 2*f5*u0*u1*v0 + f4*u1**2*v0 + 2*f5*u0**2*v1 - 2*f4*u0*u1*v1 - 2*f3*u1**2*v1 - 2*u1*v1**3 + 2*f4*u0*v0 - f3*u0*v1 + 2*f2*u1*v1 + v0*v1**2 - f2*v0
+    ell2_den = 2*u1*v0*v1 - 2*u0*v1**2 - 2*v0**2
+
+    ell3_num = f6*u1**4*v1 + 4*f6*u1**3*v0 - 6*f6*u0*u1**2*v1 - f5*u1**3*v1 - 6*f6*u0*u1*v0 - 3*f5*u1**2*v0 + 3*f6*u0**2*v1 + 4*f5*u0*u1*v1 + f4*u1**2*v1 + 2*f5*u0*v0 + 2*f4*u1*v0 - 2*f4*u0*v1 - f3*u1*v1 - v1**3 - f3*v0 + f2*v1
+    ell3_den = 2*u1*v0*v1 - 2*u0*v1**2 - 2*v0**2
+
+    ell2 = ell2_num / ell2_den
+    ell3 = ell3_num / ell3_den
+
+    ell0 = -ell3*u0*u1 + ell2*u0 + v0
+    ell1 = -ell3*u1**2 + ell3*u0 + ell2*u1 + v1
+
+    u1_dd = -(u1 + u1) - (f5 - 2*ell2*ell3) / (ell3**2 - f6)
+    u0_dd = -(u0 + u0 + u1**2 + (u1 + u1)*u1_dd) + ((2*ell1*ell3 + ell2**2 - f4) / (ell3**2 - f6))
+
+    v1_dd = -(ell3*(u1_dd**2 - u0_dd) - ell2*u1_dd + ell1)
+    v0_dd = -(ell3*u1_dd*u0_dd - ell2*u0_dd + ell0)
+    """
+
+
     # 32M 6S 1I
     return u1dd, u0dd, v1dd, v0dd, U1dd, U0dd

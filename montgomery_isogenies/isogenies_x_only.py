@@ -22,31 +22,31 @@ from sage.all import gcd, randint
 from sage.structure.element import RingElement
 
 # Local Imports
-from kummer_line import KummerLine
-from kummer_isogeny import KummerLineIsogeny
-from supersingular import torsion_basis
-from utilities import weil_pairing_pari
+from montgomery_isogenies.kummer_line import KummerLine
+from montgomery_isogenies.kummer_isogeny import KummerLineIsogeny
+from utilities.supersingular import torsion_basis, compute_point_order_D
+from utilities.pairing import weil_pairing_pari
 
 # =========================================================== #
 #    Compute an isogeny and codomain using x-only algorithms  #
 # =========================================================== #
 
-def _random_isogeny_x_only(E, D):
+
+def _random_isogeny_x_only(E, D, even_power=None):
     """
     Helper function to compute one step in the isogeny
-    chain for `random_isogeny_x_only`. 
+    chain for `random_isogeny_x_only`.
     """
     # Compute a random point of order D to act as our
     # isogeny kernel
-    k = randint(0, D)
-    P, Q = torsion_basis(E, D)
-    K = P + k*Q
+    x_start = E.base_ring().random_element()
+    K = compute_point_order_D(E, D, x_start=x_start, even_power=even_power)
 
     # Map curve and kernel to Kummer Line
     L = KummerLine(E)
     xK = L(K[0])
 
-    # Use x-only arithmetic to compute an isogeny 
+    # Use x-only arithmetic to compute an isogeny
     # and codomain
     phi = KummerLineIsogeny(L, xK, D)
 
@@ -55,18 +55,19 @@ def _random_isogeny_x_only(E, D):
 
     # Speed up SageMath by setting the order of the curve
     p = E.base_ring().characteristic()
-    codomain.set_order((p+1)**2, num_checks=0)
-    
+    codomain.set_order((p + 1) ** 2, num_checks=0)
+
     return phi, codomain
 
-def random_isogeny_x_only(E, D):
+
+def random_isogeny_x_only(E, D, even_power=None):
     """
     Computes a D-degree isogeny from E using
     x-only arithmetic and returns the KummerIsogeny
     together with the codomain curve.
 
     When D does not divide the available torsion,
-    the isogeny is computed in steps with the 
+    the isogeny is computed in steps with the
     helper function _random_isogeny_x_only
     """
     deg = 1
@@ -76,15 +77,16 @@ def random_isogeny_x_only(E, D):
     # Compute isogenies of degree gcd(D // deg, p+1)
     # until an isogeny of degree D is computed
     while deg != D:
-        next_deg = gcd(D // deg, p+1)
-        phi, E = _random_isogeny_x_only(E, next_deg)
+        next_deg = gcd(D // deg, p + 1)
+        phi, E = _random_isogeny_x_only(E, next_deg, even_power=even_power)
         deg *= next_deg
 
         phi_list.append(phi)
-    
+
     # Create a composite x-only isogeny from factors
     phi = KummerLineIsogeny.from_factors(phi_list)
     return phi, E
+
 
 def isogeny_from_scalar_x_only(E, D, m, basis=None):
     """
@@ -96,7 +98,7 @@ def isogeny_from_scalar_x_only(E, D, m, basis=None):
     the canonical basis E[D] = <P,Q> and given scalar(s)
     of the form:
         K = P + [m]Q     or     K = [a]P + [b]Q
-    depending on whether m is a scalar, or a length two 
+    depending on whether m is a scalar, or a length two
     tuple of scalars
     """
     # Allow a precomputed basis
@@ -107,16 +109,16 @@ def isogeny_from_scalar_x_only(E, D, m, basis=None):
 
     # Allow either an integer or tuple of integers
     if isinstance(m, RingElement) or isinstance(m, int):
-        K = P + m*Q
+        K = P + m * Q
     else:
         assert len(m) == 2
-        K = m[0]*P + m[1]*Q
+        K = m[0] * P + m[1] * Q
 
     # Map curve and kernel to Kummer Line
     L = KummerLine(E)
     xK = L(K)
 
-    # Use x-only arithmetic to compute an isogeny 
+    # Use x-only arithmetic to compute an isogeny
     # and codomain
     phi = KummerLineIsogeny(L, xK, D)
 
@@ -125,35 +127,38 @@ def isogeny_from_scalar_x_only(E, D, m, basis=None):
 
     # Speed up SageMath by setting the order of the curve
     p = E.base_ring().characteristic()
-    codomain.set_order((p+1)**2, num_checks=0)
+    codomain.set_order((p + 1) ** 2, num_checks=0)
 
     return phi, codomain
+
 
 # ================================================= #
 #    Evaluate an x-only isogeny on a torsion basis  #
 # ================================================= #
 
+
 def lift_image_to_curve(P, Q, ximP, ximQ, n, d):
     """
     Given the torsion basis <P, Q> = E[n]
     and the x-coordinates of the images x(phi(P))
-    and x(phi(P)) of a degree d-isogeny compute 
+    and x(phi(P)) of a degree d-isogeny compute
     the image of the full points up to an overall sign:
         ±phi(P), ±phi(Q)
     """
     # Lift the points to the curve
     imPb = ximP.curve_point()
     imQb = ximQ.curve_point()
-    
+
     # Compute two pairings
     pair_E0 = weil_pairing_pari(P, Q, n)
     pair_E1 = weil_pairing_pari(imPb, imQb, n)
-    
+
     # Correct the sign
     if pair_E0**d != pair_E1:
         imQb = -imQb
 
     return imPb, imQb
+
 
 def evaluate_isogeny_x_only(phi, P, Q, n, d):
     """
@@ -162,7 +167,7 @@ def evaluate_isogeny_x_only(phi, P, Q, n, d):
     and overall sign: ±phi(P), ±phi(Q)
 
     Does this by evaluating KummerPoints with a KummerIsogeny
-    and lifts them back to the curve using the Weil pairing 
+    and lifts them back to the curve using the Weil pairing
     trick in `lift_image_to_curve`
     """
     # Domain of isogeny
@@ -170,11 +175,11 @@ def evaluate_isogeny_x_only(phi, P, Q, n, d):
 
     # Extract x-coordinates from points and convert to KummerPoints
     xP, xQ = L0(P[0]), L0(Q[0])
-    
+
     # Evaluate the isogeny
     ximP, ximQ = phi(xP), phi(xQ)
-    
+
     # Use Weil pairing trick to get y-coordinate back
     imP, imQ = lift_image_to_curve(P, Q, ximP, ximQ, n, d)
-    
+
     return imP, imQ

@@ -28,12 +28,12 @@ from random import randint
 
 # Local imports
 from festa import FESTA
-from parameters import parameter_sets
-from utilities import print_info, speed_up_sagemath
+from parameters.params import parameter_sets
+from utilities.utils import print_info, speed_up_sagemath
 
 # Sage goes vroom!
 # Sets up a monkey-patch to cache vector_space which
-# dramatically helps with performance of the genus-two 
+# dramatically helps with performance of the genus-two
 # arithmetic and isogenies
 speed_up_sagemath()
 
@@ -46,7 +46,7 @@ for arg in sys.argv[1:]:
         SECURITY = "TOY"
     elif arg.lower() in ["--192", "-II"]:
         SECURITY = "192"
-    elif  arg.lower() in ["--256", "-V"]:
+    elif arg.lower() in ["--256", "-V"]:
         SECURITY = "256"
     elif arg.lower() in ["-c", "--circulant"]:
         DIAG = False
@@ -56,7 +56,7 @@ NAME = "FESTA_" + SECURITY
 # Initialise Alice and Bob
 params = parameter_sets[NAME]
 alice = FESTA(params, diag=DIAG)
-bob   = FESTA(params, diag=DIAG)
+bob = FESTA(params, diag=DIAG)
 
 # Generate a random message
 m = randint(0, 2**alice.lambda_security - 1)
@@ -94,4 +94,3 @@ print_info(f"Decrypt took: {decrypt_time:.3f} seconds")
 # Now we know how long everything took, let's make
 # sure it works!
 assert m == new_m, "Decryption failed!"
-
