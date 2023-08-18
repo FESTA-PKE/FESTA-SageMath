@@ -53,14 +53,14 @@ FESTA has been implemented as a class in the file [`festa.py`](festa.py). This f
 implementation of the FESTA trapdoor evaluation and inversion, as well as the functions for the OAEP 
 transform to build the PKE and functions to compress and decompress both the public key and ciphertext. 
 An effort has been made to keep the comments and doc-strings verbose. The FESTA parameters for all security 
-levels, including small toy parameters for testing, are defined in [`parameters/paras.py`](parameters/params.py). 
-The file [`parameters/parameter_generator.sage`](parameters/parameter_generator.sage) 
+levels, including small toy parameters for testing, are defined in [`parameters/paras.py`](./parameters/params.py). 
+The file [`parameters/parameter_generator.sage`](./parameters/parameter_generator.sage) 
 has the code which we used for searching for optimal parameters
 targeting all security levels.
 
 For the remainder of this section, we break down the auxiliary files which contain helper functions for various steps of the FESTA protocol.
 
-The file [`utilities/supersingular.py`](utilities/supersingular.py) 
+The file [`utilities/supersingular.py`](./utilities/supersingular.py) 
 contains functions to compute points of a given 
 order $D$ and the generation of canonical 
 torsion bases $E[D] = \langle P, Q \rangle$. We include the optimised `entangled_torsion_basis()` following 
@@ -68,7 +68,7 @@ torsion bases $E[D] = \langle P, Q \rangle$. We include the optimised `entangled
 Additionally, this file contains `compute_canonical_kernel()` as described in algorithm six of the 
 FESTA paper. 
 
-The file [`utilities/compression.py`](utilities/compression.py) 
+The file [`utilities/compression.py`](./utilities/compression.py) 
 contains helper functions for the main compression and decompression algorithms 
 of FESTA, such as the compression of a curve to a single field element and the compression of a point $P \in E[2^b]$ to a bytestring 
 representing three integers $(a,b,c)$ in $\mathbb{Z}/2^b\mathbb{Z}$. We need only three integers as our scaling matricies are unitary
@@ -76,10 +76,10 @@ and compatibility of the Weil pairing with isogenies means we can always efficie
 `recover_lost_scalar()`.
 
 Our isogenies between elliptic curves are implemented using x-only formula. 
-In [`montgomery_isogenies/kummer_line.py`](montgomery_isogenies/kummer_line.py) 
+In [`montgomery_isogenies/kummer_line.py`](./montgomery_isogenies/kummer_line.py) 
 we define classes for the Kummer line of Montgomery curves (`KummerLine`) and points on the Kummer line (`KummerPoint`). Essentially, these are a standard 
 implementation of x-only Montgomery curves with projective $(X : Z)$ coordinates. We additionally implement x-only isogenies between 
-these Kummer lines in [`montgomery_isogenies/kummer_isogeny.py`](montgomery_isogenies/kummer_isogeny.py) 
+these Kummer lines in [`montgomery_isogenies/kummer_isogeny.py`](./montgomery_isogenies/kummer_isogeny.py) 
 using the Costello-Hisil-Renes formula for small prime degree isogenies
 and the VéluSqrt formula for the large prime degree isogenies. The main class `KummerLineIsogeny` accepts a kernel generator of composite 
 order and handles factorisation of the isogeny into prime-degree parts.
@@ -87,13 +87,13 @@ order and handles factorisation of the isogeny into prime-degree parts.
 In several places in the FESTA implementation, we cannot work with x-only formula as we need the affine coordinates for addition of various 
 points and the computation of the isogeny between elliptic products. As such, the use of x-only formula for the isogenies requires that it's 
 possible to lift the images from the Kummer line back to the curve. 
-The file [`montgomery_isogenies/isogenies_x_only.py`](montgomery_isogenies/isogenies_x_only.py) contains helper functions which do exactly this. They take as input Montgomery curves 
+The file [`montgomery_isogenies/isogenies_x_only.py`](./montgomery_isogenies/isogenies_x_only.py) contains helper functions which do exactly this. They take as input Montgomery curves 
 and torsion bases, maps everything to the Kummer line, computes and evaluates isogenies and finally lifts everything to the image curve.
 
-There are two files which are used to implement the $(2^b,2^b)$ isogeny between elliptic products. In [`richelot_isogenies/divisor_arithmetic.py`](richelot_isogenies/divisor_arithmetic.py), 
+There are two files which are used to implement the $(2^b,2^b)$ isogeny between elliptic products. In [`richelot_isogenies/divisor_arithmetic.py`](./richelot_isogenies/divisor_arithmetic.py), 
 we implement efficient addition and doubling laws for divisors of Jacobians of genus two hyperelliptic curves. These have been derived by generalising 
 a result of [Costello and Lauter](https://eprint.iacr.org/2011/306) to recover algorithms which only require base field operations, avoiding the need 
-for slower arithmetic in the polynomial ring. The $(2^b,2^b)$ isogeny itself is implemented in [`richelot_isogenies/richelot_isogenies.py`](richelot_isogenies/richelot_isogenies.py) and has 
+for slower arithmetic in the polynomial ring. The $(2^b,2^b)$ isogeny itself is implemented in [`richelot_isogenies/richelot_isogenies.py`](./richelot_isogenies/richelot_isogenies.py) and has 
 been adapted from the previous work on implementing both the [Castryck-Decru](https://github.com/jack4818/Castryck-Decru-SageMath) and 
 [MMPPW](https://github.com/Breaking-SIDH/direct-attack) SIDH attacks.
 
